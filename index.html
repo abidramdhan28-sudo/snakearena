@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snake Arena: MOBA Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Poppins', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            touch-action: none; /* Mencegah scroll di mobile saat main */
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* UI Overlays */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .interactive-ui {
+            pointer-events: auto;
+        }
+
+        /* Neon Text Effect */
+        .neon-text {
+            text-shadow: 0 0 10px rgba(74, 222, 128, 0.8), 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+
+        /* Glassmorphism panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="text-white selection:bg-none">
+
+    <!-- Canvas Game -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Overlay Layer -->
+    <div class="ui-layer flex flex-col justify-between">
+        
+        <!-- HUD (Heads Up Display) -->
+        <div id="hud" class="hidden p-4 flex justify-between items-start">
+            <div class="glass-panel p-3 md:p-4 rounded-xl shadow-lg">
+                <p class="text-sm text-gray-400 font-semibold uppercase tracking-wider mb-1">Skormu</p>
+                <div class="text-3xl md:text-4xl font-bold text-green-400 drop-shadow-md" id="scoreDisplay">0</div>
+                <div class="mt-2 text-xs text-gray-300 flex items-center gap-2">
+                    <i class="fas fa-mouse-pointer"></i> Arahkan kursor/sentuh
+                </div>
+                <div class="text-xs text-gray-300 flex items-center gap-2 mt-1">
+                    <i class="fas fa-bolt text-yellow-400"></i> Klik tahan untuk Boost
+                </div>
+            </div>
+
+            <!-- Leaderboard -->
+            <div class="glass-panel p-3 md:p-4 rounded-xl shadow-lg w-48 md:w-56">
+                <p class="text-sm text-gray-400 font-semibold uppercase tracking-wider mb-2 text-center border-b border-gray-600 pb-2">Top Arena</p>
+                <ul id="leaderboard" class="space-y-2 text-sm">
+                    <!-- Diisi oleh JS -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="ui-layer interactive-ui flex items-center justify-center bg-slate-900/90 backdrop-blur-sm z-50 transition-opacity duration-500">
+        <div class="text-center p-8 max-w-lg w-full">
+            <i class="fas fa-dragon text-6xl text-green-400 mb-4 animate-bounce"></i>
+            <h1 class="text-5xl md:text-6xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600 neon-text">SNAKE ARENA</h1>
+            <p class="text-lg text-gray-400 mb-8">MOBA Survival Simulation</p>
+            
+            <div class="glass-panel rounded-2xl p-6 mb-8 text-left space-y-3 border border-slate-700 shadow-2xl">
+                <h3 class="font-bold text-white mb-2"><i class="fas fa-book-open text-blue-400 mr-2"></i>Cara Bermain:</h3>
+                <p class="text-sm text-gray-300"><i class="fas fa-check text-green-400 mr-2"></i>Makan titik-titik bersinar untuk tumbuh besar.</p>
+                <p class="text-sm text-gray-300"><i class="fas fa-check text-green-400 mr-2"></i>Jebak musuh agar kepalanya menabrak badanmu.</p>
+                <p class="text-sm text-gray-300"><i class="fas fa-check text-green-400 mr-2"></i>Jika kepalamu menabrak musuh, kamu kalah!</p>
+                <p class="text-sm text-gray-300"><i class="fas fa-check text-green-400 mr-2"></i>Klik & tahan (atau sentuh) layar untuk lari cepat (Boost).</p>
+            </div>
+
+            <button id="startBtn" class="group relative px-8 py-4 bg-green-500 hover:bg-green-400 text-slate-900 font-bold text-xl rounded-full shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:shadow-[0_0_30px_rgba(34,197,94,0.6)] transition-all duration-300 transform hover:scale-105 active:scale-95 w-full">
+                <span class="relative z-10">MASUK ARENA</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="ui-layer interactive-ui hidden flex items-center justify-center bg-red-900/80 backdrop-blur-md z-50">
+        <div class="text-center p-8 glass-panel border-red-500/30 rounded-3xl max-w-md w-full mx-4 shadow-2xl">
+            <h2 class="text-5xl font-extrabold text-red-500 mb-2 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">TERBUNUH!</h2>
+            <p id="killMessage" class="text-gray-300 mb-6">Kamu menabrak ular lain.</p>
+            
+            <div class="bg-slate-800/50 rounded-xl p-4 mb-8">
+                <p class="text-sm text-gray-400 uppercase tracking-wide">Skor Akhir</p>
+                <p class="text-5xl font-bold text-white my-2" id="finalScore">0</p>
+            </div>
+
+            <button id="restartBtn" class="px-8 py-3 bg-white text-red-600 hover:bg-gray-200 font-bold text-lg rounded-full shadow-lg transition-all transform hover:scale-105 active:scale-95 w-full">
+                <i class="fas fa-redo-alt mr-2"></i> Main Lagi
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimasi performa
+        
+        // UI Elements
+        const startScreen = document.getElementById('startScreen');
+        const hud = document.getElementById('hud');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const finalScore = document.getElementById('finalScore');
+        const leaderboardList = document.getElementById('leaderboard');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Game Constants
+        const ARENA_SIZE = 4000;
+        const FOOD_COUNT = 800;
+        const BOT_COUNT = 15;
+        const BASE_RADIUS = 12;
+        const BASE_SPEED = 4;
+        const BOOST_SPEED = 8;
+        
+        // Game State
+        let width, height;
+        let camera = { x: 0, y: 0, zoom: 1 };
+        let mouse = { x: 0, y: 0, isDown: false };
+        let isPlaying = false;
+        let animationId;
+        let frameCount = 0;
+
+        // Entities
+        let player = null;
+        let snakes = [];
+        let foods = [];
+        let particles = [];
+
+        // Colors
+        const snakeColors = [
+            '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', 
+            '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', 
+            '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899'
+        ];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Set mouse ke tengah layar saat awal
+            if (!isPlaying && !mouse.x) {
+                mouse.x = width / 2;
+                mouse.y = height / 2;
+            }
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Input Mouse
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mousedown', () => mouse.isDown = true);
+        window.addEventListener('mouseup', () => mouse.isDown = false);
+
+        // Input Touch (Mobile)
+        window.addEventListener('touchstart', (e) => {
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+            mouse.isDown = true;
+        }, {passive: false});
+        
+        window.addEventListener('touchmove', (e) => {
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        }, {passive: false});
+        
+        window.addEventListener('touchend', () => mouse.isDown = false);
+
+        class Food {
+            constructor(x, y, value = 1, color = null) {
+                this.x = x || Math.random() * ARENA_SIZE;
+                this.y = y || Math.random() * ARENA_SIZE;
+                this.value = value;
+                this.radius = Math.min(3 + value * 2, 15);
+                this.color = color || `hsl(${Math.random() * 360}, 100%, 60%)`;
+                this.wobbleOffset = Math.random() * Math.PI * 2;
+            }
+
+            draw(ctx) {
+                // Efek denyut
+                let currentRadius = this.radius + Math.sin(frameCount * 0.1 + this.wobbleOffset) * 1.5;
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, Math.max(1, currentRadius), 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.velocity = {
+                    x: (Math.random() - 0.5) * 10,
+                    y: (Math.random() - 0.5) * 10
+                };
+                this.life = 1;
+                this.decay = Math.random() * 0.05 + 0.02;
+                this.size = Math.random() * 3 + 1;
+            }
+
+            update() {
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                this.life -= this.decay;
+            }
+
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        class Snake {
+            constructor(x, y, isPlayer = false, name = "Bot") {
+                this.x = x;
+                this.y = y;
+                this.isPlayer = isPlayer;
+                this.name = name;
+                this.segments = []; // Menyimpan histori posisi {x, y}
+                this.length = isPlayer ? 20 : 20 + Math.floor(Math.random() * 50);
+                this.score = this.length * 10;
+                this.radius = BASE_RADIUS;
+                
+                this.color = isPlayer ? '#4ade80' : snakeColors[Math.floor(Math.random() * snakeColors.length)];
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = BASE_SPEED;
+                this.isBoosting = false;
+                
+                // Bot AI memory
+                this.target = null;
+                this.turnSpeed = isPlayer ? 0.15 : (0.05 + Math.random() * 0.05);
+
+                // Isi awal segments agar ular tidak spawn sebagai 1 titik
+                for(let i=0; i<this.length; i++) {
+                    this.segments.push({x: this.x, y: this.y});
+                }
+            }
+
+            updateScore(points) {
+                this.score += points;
+                // Hitung panjang berdasarkan skor (kurva melandai agar tidak terlalu besar)
+                let newLength = 20 + Math.floor(this.score / 20);
+                if (newLength > this.length) {
+                    // Tambah segment di ekor
+                    let tail = this.segments[this.segments.length - 1];
+                    for(let i=0; i < (newLength - this.length); i++){
+                         this.segments.push({...tail});
+                    }
+                    this.length = newLength;
+                }
+                // Update ukuran radius tubuh
+                this.radius = BASE_RADIUS + (Math.log(this.score / 100 + 1) * 2);
+            }
+
+            die() {
+                // Jatuhkan makanan sepanjang tubuh
+                for (let i = 0; i < this.segments.length; i += 3) {
+                    let seg = this.segments[i];
+                    foods.push(new Food(
+                        seg.x + (Math.random() * 10 - 5), 
+                        seg.y + (Math.random() * 10 - 5), 
+                        Math.max(1, Math.floor(this.score / this.length / 2)), 
+                        this.color
+                    ));
+                }
+                
+                // Efek partikel kepala meledak
+                for(let i=0; i<20; i++){
+                    particles.push(new Particle(this.x, this.y, this.color));
+                }
+            }
+
+            updateBotAI() {
+                // AI Sederhana: Cari makanan terdekat, hindari dinding
+                
+                // 1. Hindari batas arena
+                const margin = 200;
+                if (this.x < margin || this.x > ARENA_SIZE - margin || 
+                    this.y < margin || this.y > ARENA_SIZE - margin) {
+                    
+                    let centerX = ARENA_SIZE / 2;
+                    let centerY = ARENA_SIZE / 2;
+                    let angleToCenter = Math.atan2(centerY - this.y, centerX - this.x);
+                    
+                    // Rotasi pelan ke tengah
+                    let diff = angleToCenter - this.angle;
+                    // Normalisasi diff ke -PI to PI
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    
+                    this.angle += diff * 0.05;
+                    this.target = null; // Lupakan makanan jika dekat dinding
+                } else {
+                    // 2. Cari makanan (Optimasi: hanya cek sebagian makanan per frame)
+                    if (frameCount % 30 === 0 || !this.target) {
+                        let closestDist = Infinity;
+                        let closestFood = null;
+                        
+                        // Cek acak 20 makanan untuk mencari yang dekat (hemat CPU)
+                        for(let i=0; i<20; i++) {
+                            let f = foods[Math.floor(Math.random() * foods.length)];
+                            if(!f) continue;
+                            let dx = f.x - this.x;
+                            let dy = f.y - this.y;
+                            let dist = dx*dx + dy*dy;
+                            if (dist < closestDist) {
+                                closestDist = dist;
+                                closestFood = f;
+                            }
+                        }
+                        this.target = closestFood;
+                    }
+
+                    // Arahkan ke target
+                    if (this.target) {
+                        let targetAngle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+                        let diff = targetAngle - this.angle;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        
+                        this.angle += diff * this.turnSpeed;
+                    } else {
+                        // Jalan meliuk acak
+                        this.angle += (Math.random() - 0.5) * 0.1;
+                    }
+                }
+                
+                // Sesekali bot nge-boost
+                this.isBoosting = (Math.random() < 0.05 && this.score > 200);
+            }
+
+            update() {
+                // Tentukan sudut dan kecepatan
+                if (this.isPlayer) {
+                    // Sudut diarahkan ke mouse, relatif terhadap kamera layar
+                    let screenX = (this.x - camera.x) * camera.zoom;
+                    let screenY = (this.y - camera.y) * camera.zoom;
+                    
+                    let dx = mouse.x - screenX;
+                    let dy = mouse.y - screenY;
+                    
+                    let targetAngle = Math.atan2(dy, dx);
+                    
+                    // Interpolasi rotasi agar tidak patah-patah
+                    let diff = targetAngle - this.angle;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    
+                    this.angle += diff * this.turnSpeed;
+                    
+                    // Cek Input Boost
+                    this.isBoosting = mouse.isDown && this.score > 50;
+                } else {
+                    this.updateBotAI();
+                }
+
+                // Logika Boost
+                if (this.isBoosting) {
+                    this.speed = BOOST_SPEED;
+                    if (frameCount % 5 === 0) {
+                        this.score -= 2; // Biaya boost
+                        if(this.score < 50) this.isBoosting = false; // Habis tenaga
+                        
+                        // Jatuhkan makanan kecil dari ekor
+                        let tail = this.segments[this.segments.length - 1];
+                        foods.push(new Food(tail.x, tail.y, 1, this.color));
+                    }
+                } else {
+                    this.speed = BASE_SPEED;
+                }
+
+                // Hitung posisi baru
+                let nextX = this.x + Math.cos(this.angle) * this.speed;
+                let nextY = this.y + Math.sin(this.angle) * this.speed;
+
+                // Batas Arena (Menabrak dinding = mati)
+                if (nextX < 0 || nextX > ARENA_SIZE || nextY < 0 || nextY > ARENA_SIZE) {
+                    if (this.isPlayer) gameOver("Menabrak Dinding Arena!");
+                    this.dead = true;
+                    return;
+                }
+
+                this.x = nextX;
+                this.y = nextY;
+
+                // Update Segments (Tubuh mengikuti kepala)
+                // Hapus ekor terakhir, masukkan kepala baru di depan
+                this.segments.unshift({x: this.x, y: this.y});
+                if (this.segments.length > this.length) {
+                    this.segments.pop();
+                }
+            }
+
+            draw(ctx) {
+                // Gambar Tubuh (dari ekor ke kepala)
+                const spacing = 3; // Jarak antar segmen lingkaran yang digambar
+                
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                for (let i = this.segments.length - 1; i >= 0; i -= spacing) {
+                    let seg = this.segments[i];
+                    // Kecilkan ukuran ekor
+                    let currentRadius = this.radius * (1 - (i / this.segments.length) * 0.4);
+                    
+                    ctx.beginPath();
+                    ctx.arc(seg.x, seg.y, currentRadius, 0, Math.PI * 2);
+                    
+                    if (this.isPlayer) {
+                         // Garis tubuh player
+                         ctx.fillStyle = i % 2 === 0 ? this.color : '#22c55e'; // belang
+                    } else {
+                         ctx.fillStyle = i % 2 === 0 ? this.color : '#334155';
+                    }
+                    
+                    ctx.fill();
+                    
+                    // Stroke batas tubuh
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                    ctx.stroke();
+                }
+
+                // Gambar Kepala
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                
+                // Mata
+                ctx.fillStyle = 'white';
+                let eyeOffsetX = Math.cos(this.angle + Math.PI/4) * (this.radius * 0.5);
+                let eyeOffsetY = Math.sin(this.angle + Math.PI/4) * (this.radius * 0.5);
+                
+                let eyeOffsetX2 = Math.cos(this.angle - Math.PI/4) * (this.radius * 0.5);
+                let eyeOffsetY2 = Math.sin(this.angle - Math.PI/4) * (this.radius * 0.5);
+                
+                // Mata 1
+                ctx.beginPath(); ctx.arc(this.x + eyeOffsetX, this.y + eyeOffsetY, this.radius * 0.3, 0, Math.PI * 2); ctx.fill();
+                // Mata 2
+                ctx.beginPath(); ctx.arc(this.x + eyeOffsetX2, this.y + eyeOffsetY2, this.radius * 0.3, 0, Math.PI * 2); ctx.fill();
+
+                // Pupil hitam
+                ctx.fillStyle = 'black';
+                let pupOffsetX = Math.cos(this.angle) * (this.radius * 0.1);
+                let pupOffsetY = Math.sin(this.angle) * (this.radius * 0.1);
+                ctx.beginPath(); ctx.arc(this.x + eyeOffsetX + pupOffsetX, this.y + eyeOffsetY + pupOffsetY, this.radius * 0.15, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(this.x + eyeOffsetX2 + pupOffsetX, this.y + eyeOffsetY2 + pupOffsetY, this.radius * 0.15, 0, Math.PI * 2); ctx.fill();
+
+                // Nama di atas ular
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.font = '12px Poppins';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, this.x, this.y - this.radius - 15);
+            }
+        }
+
+        function initGame() {
+            snakes = [];
+            foods = [];
+            particles = [];
+            frameCount = 0;
+            
+            // Setup Player (Tengah Arena)
+            player = new Snake(ARENA_SIZE/2, ARENA_SIZE/2, true, "Kamu");
+            snakes.push(player);
+
+            // Setup Bots
+            const botNames = ["Venom", "Slyther", "Mamba", "Cobra", "Viper", "Goliath", "Bot_X", "Titan", "Shadow", "ProGamer", "NoobMaster", "Worm", "Naga", "Rex", "Slayer"];
+            for (let i = 0; i < BOT_COUNT; i++) {
+                spawnBot(botNames[i % botNames.length]);
+            }
+
+            // Makanan awal
+            for (let i = 0; i < FOOD_COUNT; i++) {
+                foods.push(new Food());
+            }
+
+            // Reset UI
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+            
+            isPlaying = true;
+            if (animationId) cancelAnimationFrame(animationId);
+            gameLoop();
+        }
+
+        function spawnBot(name) {
+            let x = Math.random() * ARENA_SIZE;
+            let y = Math.random() * ARENA_SIZE;
+            // Pastikan tidak spawn terlalu dekat dengan player
+            if(player && Math.abs(x - player.x) < 500 && Math.abs(y - player.y) < 500) {
+                x = ARENA_SIZE - x; // Lempar ke ujung lain
+            }
+            let bot = new Snake(x, y, false, name);
+            snakes.push(bot);
+        }
+
+        function gameOver(reason) {
+            isPlaying = false;
+            player.die();
+            
+            hud.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            
+            document.getElementById('killMessage').textContent = reason;
+            document.getElementById('finalScore').textContent = Math.floor(player.score);
+        }
+
+        function updateLeaderboard() {
+            // Urutkan ular berdasarkan skor
+            let sortedSnakes = [...snakes].sort((a, b) => b.score - a.score);
+            
+            leaderboardList.innerHTML = '';
+            for (let i = 0; i < Math.min(5, sortedSnakes.length); i++) {
+                let s = sortedSnakes[i];
+                let isMe = s === player;
+                let li = document.createElement('li');
+                li.className = `flex justify-between items-center ${isMe ? 'text-green-400 font-bold' : 'text-gray-300'}`;
+                li.innerHTML = `<span>#${i+1} ${s.name}</span> <span>${Math.floor(s.score)}</span>`;
+                leaderboardList.appendChild(li);
+            }
+        }
+
+        function checkCollisions() {
+            // 1. Ular makan makanan
+            for (let i = 0; i < snakes.length; i++) {
+                let s = snakes[i];
+                for (let j = foods.length - 1; j >= 0; j--) {
+                    let f = foods[j];
+                    // Cek jarak Euclidean kuadrat (lebih cepat dari Math.sqrt)
+                    let dx = s.x - f.x;
+                    let dy = s.y - f.y;
+                    let distSq = dx*dx + dy*dy;
+                    let hitRadius = (s.radius + f.radius);
+                    
+                    if (distSq < hitRadius * hitRadius) {
+                        s.updateScore(f.value * 5);
+                        foods.splice(j, 1);
+                        // Respawn makanan agar total tetap
+                        if (foods.length < FOOD_COUNT) {
+                             foods.push(new Food());
+                        }
+                    }
+                }
+            }
+
+            // 2. Tabrakan Ular (Kepala ke Badan Ular Lain)
+            for (let i = 0; i < snakes.length; i++) {
+                let headSnake = snakes[i];
+                if(headSnake.dead) continue;
+
+                for (let j = 0; j < snakes.length; j++) {
+                    let bodySnake = snakes[j];
+                    if (i === j) continue; // Jangan cek tubuh sendiri
+                    
+                    // Lewati sebagian segmen agar lebih ringan (cek tiap kelipatan 3)
+                    for (let k = 0; k < bodySnake.segments.length; k += 3) {
+                        let seg = bodySnake.segments[k];
+                        let dx = headSnake.x - seg.x;
+                        let dy = headSnake.y - seg.y;
+                        let distSq = dx*dx + dy*dy;
+                        
+                        let radiusSum = headSnake.radius * 0.8 + bodySnake.radius * 0.8; // Toleransi hitbox
+
+                        if (distSq < radiusSum * radiusSum) {
+                            headSnake.dead = true;
+                            if (headSnake.isPlayer) {
+                                gameOver(`Ditabrak oleh ${bodySnake.name}!`);
+                            }
+                            break; // Keluar dari loop segmen
+                        }
+                    }
+                }
+            }
+
+            // Hapus ular yang mati
+            for (let i = snakes.length - 1; i >= 0; i--) {
+                if (snakes[i].dead) {
+                    snakes[i].die();
+                    snakes.splice(i, 1);
+                    // Jika bot mati, respawn bot baru
+                    if(isPlaying && snakes.length < BOT_COUNT + 1) {
+                         setTimeout(() => spawnBot("Bot_Baru"), 2000);
+                    }
+                }
+            }
+        }
+
+        function drawGrid(ctx) {
+            ctx.strokeStyle = '#1e293b'; // Slate 800
+            ctx.lineWidth = 2;
+            const gridSize = 100;
+            
+            // Hitung grid yang terlihat di kamera
+            let startX = Math.floor(camera.x / gridSize) * gridSize;
+            let startY = Math.floor(camera.y / gridSize) * gridSize;
+            let endX = startX + width / camera.zoom + gridSize;
+            let endY = startY + height / camera.zoom + gridSize;
+            
+            ctx.beginPath();
+            for (let x = startX; x <= endX; x += gridSize) {
+                ctx.moveTo(x, startY);
+                ctx.lineTo(x, endY);
+            }
+            for (let y = startY; y <= endY; y += gridSize) {
+                ctx.moveTo(startX, y);
+                ctx.lineTo(endX, y);
+            }
+            ctx.stroke();
+            
+            // Gambar batas arena (Merah menyala)
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(0, 0, ARENA_SIZE, ARENA_SIZE);
+        }
+
+        function gameLoop() {
+            if (!isPlaying) return;
+            frameCount++;
+
+            // 1. Update Logika
+            for (let s of snakes) s.update();
+            for (let p of particles) p.update();
+            
+            // Hapus partikel mati
+            particles = particles.filter(p => p.life > 0);
+
+            checkCollisions();
+
+            // Update Kamera (mengikuti player)
+            if (player && !player.dead) {
+                // Kamera mengikuti dengan pelan (easing)
+                let targetCamX = player.x - (width / 2) / camera.zoom;
+                let targetCamY = player.y - (height / 2) / camera.zoom;
+                
+                camera.x += (targetCamX - camera.x) * 0.1;
+                camera.y += (targetCamY - camera.y) * 0.1;
+
+                // Zoom out perlahan jika tubuh makin besar
+                let targetZoom = Math.max(0.4, 1 - (player.score / 5000));
+                camera.zoom += (targetZoom - camera.zoom) * 0.05;
+
+                // Update UI Score
+                scoreDisplay.textContent = Math.floor(player.score);
+            }
+
+            // Update Leaderboard setiap 30 frame (setengah detik)
+            if (frameCount % 30 === 0) {
+                updateLeaderboard();
+            }
+
+            // 2. Render / Gambar
+            // Bersihkan kanvas
+            ctx.fillStyle = '#0f172a'; // Background slate 900
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.save();
+            // Terapkan Kamera
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
+
+            // Gambar Latar
+            drawGrid(ctx);
+
+            // Gambar Makanan
+            for (let f of foods) {
+                // Culling: Hanya gambar yang masuk layar
+                if (f.x > camera.x - 50 && f.x < camera.x + width/camera.zoom + 50 &&
+                    f.y > camera.y - 50 && f.y < camera.y + height/camera.zoom + 50) {
+                    f.draw(ctx);
+                }
+            }
+
+            // Gambar Partikel
+            for (let p of particles) p.draw(ctx);
+
+            // Gambar Ular (Urutkan agar ular yang kecil digambar duluan, ular besar di atas)
+            let snakesToDraw = [...snakes].sort((a, b) => a.score - b.score);
+            for (let s of snakesToDraw) s.draw(ctx);
+
+            ctx.restore();
+
+            // Loop
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listeners UI
+        startBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('click', initGame);
+
+    </script>
+</body>
+</html>
